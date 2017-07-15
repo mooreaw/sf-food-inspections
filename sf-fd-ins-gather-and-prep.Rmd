@@ -1,0 +1,93 @@
+---
+title: 'Download & Gather SF Food Inspections Data'
+output: html_document
+date: '`r Sys.Date()`'
+---
+
+### Download the files
+
+```{r init, warning=FALSE, message=FALSE}
+library(dplyr)
+library(lubridate)
+library(readr)
+library(stringr)
+```
+
+```{r download, eval = TRUE}
+# inspections and violations
+download.file(
+  "https://extxfer.sfdph.org/food/SFFoodProgram_Complete_Data.zip",
+  "data/SFFoodProgram_Complete_Data.zip"
+)
+
+# file documentation
+download.file(
+  "https://extxfer.sfdph.org/food/File%20Specifications.pdf",
+  "data/file-specifications.pdf"
+)
+
+unzip("data/SFFoodProgram_Complete_Data.zip", overwrite = TRUE, exdir = "data/")
+```
+
+### Perform minor cleaning on each piece
+
+```{r clean, message=FALSE}
+bus <- read_csv("data/businesses_plus.csv")
+ins <- read_csv("data/inspections_plus.csv")
+vil <- read_csv("data/violations_plus.csv")
+
+ins <- rename(ins, score = Score)
+vil <- rename(vil, violation_type_id = ViolationTypeID)
+
+# inspection scores
+ins$score <- ifelse(is.na(ins$score), -99, ins$score)
+ins[between(ins$score, 0, 70), "score_cat"]  <- "poor"
+ins[between(ins$score, 71, 85), "score_cat"] <- "needs improvement"
+ins[between(ins$score, 86, 90), "score_cat"] <- "adequate"
+ins[ins$score > 90, "score_cat"]             <- "good"
+
+# dates are numeric-- YYYYMMDD
+ins$date <- ymd(ins$date)
+vil$date <- ymd(vil$date)
+
+bus <- bus %>%
+  select(-phone_number) %>%
+  rename(
+    zip = postal_code,
+    lat = latitude,
+    lon = longitude,
+    app_date = application_date,
+    tax_code = TaxCode,
+    bus_cert = business_certificate
+  ) %>%
+  mutate_if(is.character, str_to_upper) %>%
+  mutate(
+    app_date = mdy(app_date),
+    name = str_replace_all(name, "[[:punct:]]", ""),
+    city = city %>%
+      str_replace_all("[[:punct:]]", "") %>%
+      str_replace("SF|S F", "SAN FRANCISCO") %>%
+      str_trim,
+    
+    owner_state = str_replace_all(owner_state, "[[:punct:]]" , ""),
+    owner_name  = str_replace_all(owner_name, "[[:punct:]]", ""),
+    owner_city  = owner_city %>%
+      str_replace_all("[[:punct:]]", "") %>%
+      str_replace("SF|S F", "SAN FRANCISCO") %>%
+      str_trim
+  )
+```
+
+### Export
+
+```{r export}
+write_csv(vil, "data/violations-clean.csv")
+write_csv(ins, "data/inspections-clean.csv")
+write_csv(bus, "data/businesses-clean.csv")
+```
+
+### Session Info
+
+```{r info}
+sessionInfo()
+```

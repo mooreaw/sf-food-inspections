@@ -1,0 +1,51 @@
+---
+title: 'Geocode addresses with missing lat/lon'
+output: html_document
+date: '`r Sys.Date()`'
+---
+
+```{r init, message=FALSE, warning=FALSE}
+library(dplyr)
+library(readr)
+library(stringr)
+library(ggmap)
+```
+
+```{r import}
+bus <- read_csv("data/businesses-clean.csv")
+```
+
+```{r geocode}
+miss_latlon <- bus %>%
+  filter(is.na(lat) | is.na(lon), !is.na(address), !is.na(postal_code)) %>%
+  select(business_id, address, postal_code) %>%
+  transmute(
+    business_id = business_id,
+    address     = str_c(address, " SAN FRANCISCO CALIFORNIA ", postal_code)
+  )
+
+miss_latlon <- miss_latlon$address %>% 
+  lapply(function(x) {
+    Sys.sleep(2)
+    geocode(x, source = "dsk")
+  }) %>%
+  bind_rows %>% 
+  bind_cols(miss_latlon)
+
+# save the results
+write_csv(miss_latlon, "Box Sync/sf-fd-bus-miss-latlon.csv")
+```
+
+```{r prep and save}
+miss_latlon <- right_join(
+  bus %>% select(business_id, name, address, postal_code),
+  miss_latlon %>% select(-address),
+  by = "business_id"
+)
+
+bus <- bus %>% 
+  anti_join(miss_latlon, "business_id") %>% 
+  bind_rows(miss_latlon)
+
+write_csv(bus, "Box Sync/sf-fd-bus-clean.csv")
+```
