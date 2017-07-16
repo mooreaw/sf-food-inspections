@@ -11,17 +11,17 @@ library(stringr)
 library(ggmap)
 ```
 
-```{r import}
+```{r import, message = FALSE}
 bus <- read_csv("data/businesses-clean.csv")
 ```
 
-```{r geocode}
+```{r geocode, message = FALSE, warning = FALSE, eval = FALSE}
 miss_latlon <- bus %>%
-  filter(is.na(lat) | is.na(lon), !is.na(address), !is.na(postal_code)) %>%
-  select(business_id, address, postal_code) %>%
+  filter(is.na(lat) | is.na(lon), !is.na(address), !is.na(zip)) %>%
+  select(business_id, address, zip) %>%
   transmute(
     business_id = business_id,
-    address     = str_c(address, " SAN FRANCISCO CALIFORNIA ", postal_code)
+    address     = str_c(address, " SAN FRANCISCO CALIFORNIA ", zip)
   )
 
 miss_latlon <- miss_latlon$address %>% 
@@ -33,12 +33,16 @@ miss_latlon <- miss_latlon$address %>%
   bind_cols(miss_latlon)
 
 # save the results
-write_csv(miss_latlon, "Box Sync/sf-fd-bus-miss-latlon.csv")
+write_csv(miss_latlon, "data/sf-fd-bus-miss-latlon.csv")
+```
+
+```{r sneaky, include = FALSE}
+miss_latlon <- read_csv("data/sf-fd-bus-miss-latlon.csv")
 ```
 
 ```{r prep and save}
 miss_latlon <- right_join(
-  bus %>% select(business_id, name, address, postal_code),
+  bus %>% select(business_id, name, address, zip),
   miss_latlon %>% select(-address),
   by = "business_id"
 )
@@ -47,5 +51,5 @@ bus <- bus %>%
   anti_join(miss_latlon, "business_id") %>% 
   bind_rows(miss_latlon)
 
-write_csv(bus, "Box Sync/sf-fd-bus-clean.csv")
+write_csv(bus, "data/businesses-clean-geo-plus.csv")
 ```
